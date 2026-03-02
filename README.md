@@ -16,8 +16,8 @@
 | 架构 | x86_64 或 aarch64 |
 | C 库 | glibc 或 musl（自动检测） |
 | 依赖 | luci-compat, luci-base, curl, openssl-util |
-| 存储 | 200MB 以上可用空间 |
-| 内存 | 推荐 1GB 以上 |
+| 存储 | 1.5GB 以上可用空间 |
+| 内存 | 推荐 2GB 及以上 |
 
 ## 📦 安装
 
