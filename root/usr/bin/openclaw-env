@@ -50,7 +50,7 @@ ${NODE_BASE}/lib/node_modules/openclaw"
 
 	# 添加 pnpm 版本化目录 (如 /opt/openclaw/global/5/node_modules/openclaw)
 	for ver_dir in "${OC_GLOBAL}"/*/node_modules/openclaw; do
-		[ -d "$ver_dir" ] && search_dirs="$search_dirs
+		[ -d "$ver_dir" ] 2>/dev/null && search_dirs="$search_dirs
 $ver_dir"
 	done
 
@@ -371,21 +371,64 @@ do_check() {
 }
 
 do_upgrade() {
-	echo "=== 升级 OpenClaw ==="
+	echo "╔══════════════════════════════════════════════════════════════╗"
+	echo "║            一万AI分享  OpenClaw 升级                        ║"
+	echo "╚══════════════════════════════════════════════════════════════╝"
+	echo ""
+
 	if [ ! -x "$NODE_BIN" ]; then
 		log_error "Node.js 未安装, 请先运行: openclaw-env setup"
 		exit 1
 	fi
+
+	# 获取当前版本
+	local current_ver=""
+	local oc_entry=""
+	oc_entry=$(find_oc_entry)
+	if [ -n "$oc_entry" ]; then
+		local oc_pkg_dir="$(dirname "$oc_entry")"
+		[ -f "$oc_pkg_dir/package.json" ] && \
+			current_ver=$("$NODE_BIN" -e "try{console.log(require('$oc_pkg_dir/package.json').version)}catch(e){}" 2>/dev/null) || true
+	fi
+
+	echo "  Node.js:     $($NODE_BIN --version 2>/dev/null)"
+	[ -n "$current_ver" ] && echo "  当前版本:    v${current_ver}"
+	echo ""
 
 	local libc_type
 	libc_type=$(detect_libc)
 	local install_flags=""
 	[ "$libc_type" = "musl" ] && install_flags="--ignore-scripts"
 
-	echo "  正在升级 OpenClaw..."
-	"$NPM_BIN" install -g openclaw@latest --prefix="$OC_GLOBAL" $install_flags 2>&1 | tail -5
+	echo "=== 正在升级 OpenClaw ==="
+	echo ""
+	"$NPM_BIN" install -g openclaw@latest --prefix="$OC_GLOBAL" $install_flags 2>&1
 
-	log_info "升级完成, 请重启服务: /etc/init.d/openclaw restart"
+	# 验证升级结果
+	local new_ver=""
+	local new_entry=""
+	new_entry=$(find_oc_entry)
+	if [ -n "$new_entry" ]; then
+		local new_pkg_dir="$(dirname "$new_entry")"
+		[ -f "$new_pkg_dir/package.json" ] && \
+			new_ver=$("$NODE_BIN" -e "try{console.log(require('$new_pkg_dir/package.json').version)}catch(e){}" 2>/dev/null) || true
+	fi
+
+	echo ""
+	if [ -n "$new_ver" ]; then
+		if [ "$current_ver" = "$new_ver" ]; then
+			log_info "当前已是最新版本 v${new_ver}"
+		else
+			log_info "升级成功: v${current_ver} → v${new_ver}"
+		fi
+		echo ""
+		echo "╔══════════════════════════════════════════════════════════════╗"
+		echo "║  ✅ 升级完成！                                             ║"
+		echo "╚══════════════════════════════════════════════════════════════╝"
+	else
+		log_error "升级验证失败，OpenClaw 入口文件未找到"
+		exit 1
+	fi
 }
 
 # ── 主入口 ──

@@ -28,7 +28,7 @@ function index()
 	-- 服务控制 API
 	entry({"admin", "services", "openclaw", "service_ctl"}, call("action_service_ctl"), nil).leaf = true
 
-	-- 安装日志 API (轮询)
+	-- 安装/升级日志 API (轮询)
 	entry({"admin", "services", "openclaw", "setup_log"}, call("action_setup_log"), nil).leaf = true
 
 	-- 版本检查 API
@@ -36,6 +36,9 @@ function index()
 
 	-- 执行升级 API
 	entry({"admin", "services", "openclaw", "do_update"}, call("action_do_update"), nil).leaf = true
+
+	-- 升级日志 API (轮询)
+	entry({"admin", "services", "openclaw", "upgrade_log"}, call("action_upgrade_log"), nil).leaf = true
 
 	-- 卸载运行环境 API
 	entry({"admin", "services", "openclaw", "uninstall"}, call("action_uninstall"), nil).leaf = true
@@ -150,7 +153,8 @@ function action_service_ctl()
 		-- 先清理旧日志和状态
 		sys.exec("rm -f /tmp/openclaw-setup.log /tmp/openclaw-setup.pid /tmp/openclaw-setup.exit")
 		-- 后台安装，成功后自动启用并启动服务
-		sys.exec("( /usr/bin/openclaw-env setup > /tmp/openclaw-setup.log 2>&1; RC=$?; echo $RC > /tmp/openclaw-setup.exit; if [ $RC -eq 0 ]; then uci set openclaw.main.enabled=1; uci commit openclaw; /etc/init.d/openclaw enable; /etc/init.d/openclaw start >> /tmp/openclaw-setup.log 2>&1; fi ) & echo $! > /tmp/openclaw-setup.pid")
+		-- 注: openclaw-env 脚本有 set -e，init_openclaw 中的非关键失败不应阻止启动
+		sys.exec("( /usr/bin/openclaw-env setup > /tmp/openclaw-setup.log 2>&1; RC=$?; echo $RC > /tmp/openclaw-setup.exit; if [ $RC -eq 0 ]; then uci set openclaw.main.enabled=1; uci commit openclaw; /etc/init.d/openclaw enable 2>/dev/null; sleep 1; /etc/init.d/openclaw start >> /tmp/openclaw-setup.log 2>&1; fi ) & echo $! > /tmp/openclaw-setup.pid")
 		http.prepare_content("application/json")
 		http.write_json({ status = "ok", message = "安装已启动，请查看安装日志..." })
 		return
@@ -248,25 +252,78 @@ function action_check_update()
 end
 
 -- ═══════════════════════════════════════════
--- 执行升级 API
+-- 执行升级 API (后台执行 + 日志轮询)
 -- ═══════════════════════════════════════════
 function action_do_update()
 	local http = require "luci.http"
 	local sys = require "luci.sys"
 
-	-- 后台执行升级
-	local ignore_scripts = ""
-	local libc_check = sys.exec("ldd --version 2>&1"):lower()
-	if libc_check:find("musl") then
-		ignore_scripts = "--ignore-scripts"
-	end
+	-- 清理旧日志和状态
+	sys.exec("rm -f /tmp/openclaw-upgrade.log /tmp/openclaw-upgrade.pid /tmp/openclaw-upgrade.exit")
 
-	sys.exec("PATH=/opt/openclaw/node/bin:/opt/openclaw/global/bin:$PATH npm install -g openclaw@latest " .. ignore_scripts .. " > /tmp/openclaw-update.log 2>&1 &")
+	-- 后台执行升级，升级完成后自动重启服务
+	sys.exec("( /usr/bin/openclaw-env upgrade > /tmp/openclaw-upgrade.log 2>&1; RC=$?; echo $RC > /tmp/openclaw-upgrade.exit; if [ $RC -eq 0 ]; then echo '' >> /tmp/openclaw-upgrade.log; echo '正在重启服务...' >> /tmp/openclaw-upgrade.log; /etc/init.d/openclaw restart >> /tmp/openclaw-upgrade.log 2>&1; echo '  [✓] 服务已重启' >> /tmp/openclaw-upgrade.log; fi ) & echo $! > /tmp/openclaw-upgrade.pid")
 
 	http.prepare_content("application/json")
 	http.write_json({
 		status = "ok",
-		message = "升级已在后台启动，完成后请重启服务。日志: /tmp/openclaw-update.log"
+		message = "升级已在后台启动，请查看升级日志..."
+	})
+end
+
+-- ═══════════════════════════════════════════
+-- 升级日志轮询 API
+-- ═══════════════════════════════════════════
+function action_upgrade_log()
+	local http = require "luci.http"
+	local sys = require "luci.sys"
+
+	-- 读取日志内容
+	local log = ""
+	local f = io.open("/tmp/openclaw-upgrade.log", "r")
+	if f then
+		log = f:read("*a") or ""
+		f:close()
+	end
+
+	-- 检查进程是否还在运行
+	local running = false
+	local pid_file = io.open("/tmp/openclaw-upgrade.pid", "r")
+	if pid_file then
+		local pid = pid_file:read("*a"):gsub("%s+", "")
+		pid_file:close()
+		if pid ~= "" then
+			local check = sys.exec("kill -0 " .. pid .. " 2>/dev/null && echo yes || echo no"):gsub("%s+", "")
+			running = (check == "yes")
+		end
+	end
+
+	-- 读取退出码
+	local exit_code = -1
+	if not running then
+		local exit_file = io.open("/tmp/openclaw-upgrade.exit", "r")
+		if exit_file then
+			local code = exit_file:read("*a"):gsub("%s+", "")
+			exit_file:close()
+			exit_code = tonumber(code) or -1
+		end
+	end
+
+	-- 判断状态
+	local state = "idle"
+	if running then
+		state = "running"
+	elseif exit_code == 0 then
+		state = "success"
+	elseif exit_code > 0 then
+		state = "failed"
+	end
+
+	http.prepare_content("application/json")
+	http.write_json({
+		state = state,
+		exit_code = exit_code,
+		log = log
 	})
 end
 
