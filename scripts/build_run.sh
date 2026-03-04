@@ -206,7 +206,7 @@ echo "[3/4] 创建安装器..."
 create_installer
 
 # 替换安装器中的占位符
-sed -i "s|__PKG_VERSION__|${PKG_VERSION}|g" "$STAGING/install.sh"
+sed "s|__PKG_VERSION__|${PKG_VERSION}|g" "$STAGING/install.sh" > "$STAGING/install.sh.tmp" && mv "$STAGING/install.sh.tmp" "$STAGING/install.sh"
 # 替换文件列表占位符 — 使用临时文件拼接避免 sed/awk 多行问题
 {
 	sed '/__FILE_LIST__/,$d' "$STAGING/install.sh"
