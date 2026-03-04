@@ -76,11 +76,14 @@ act.cfgvalue = function(self, section)
 	local update_url = luci.dispatcher.build_url("admin", "services", "openclaw", "do_update")
 	local upgrade_log_url = luci.dispatcher.build_url("admin", "services", "openclaw", "upgrade_log")
 	local uninstall_url = luci.dispatcher.build_url("admin", "services", "openclaw", "uninstall")
+	local upload_url = luci.dispatcher.build_url("admin", "services", "openclaw", "upload_node")
 	local html = {}
 
 	-- 按钮区域
 	html[#html+1] = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;">'
 	html[#html+1] = '<button class="btn cbi-button cbi-button-apply" type="button" onclick="ocShowSetupDialog()" id="btn-setup" title="下载 Node.js 并安装 OpenClaw">📦 安装运行环境</button>'
+	html[#html+1] = '<input type="file" id="oc-node-upload" style="display:none;" accept=".tar.xz" onchange="ocHandleNodeUpload(event)"/>'
+	html[#html+1] = '<button class="btn cbi-button" style="border:1px solid #c0c0c0;" type="button" onclick="document.getElementById(\'oc-node-upload\').click()" id="btn-upload-node" title="上传外部离线 Node.js 安装包 (.tar.xz)">📥 离线安装 Node</button>'
 	html[#html+1] = '<button class="btn cbi-button cbi-button-action" type="button" onclick="ocServiceCtl(\'restart\')">🔄 重启服务</button>'
 	html[#html+1] = '<button class="btn cbi-button cbi-button-action" type="button" onclick="ocServiceCtl(\'stop\')">⏹️ 停止服务</button>'
 	html[#html+1] = '<button class="btn cbi-button cbi-button-action" type="button" onclick="ocCheckUpdate()" id="btn-check-update">🔍 检测升级</button>'
@@ -148,7 +151,7 @@ act.cfgvalue = function(self, section)
 	html[#html+1] = '}'
 
 	-- 安装运行环境 (带实时日志)
-	html[#html+1] = 'function ocSetup(version){'
+	html[#html+1] = 'function ocSetup(version, isManual){'
 	html[#html+1] = 'var btn=document.getElementById("btn-setup");'
 	html[#html+1] = 'var panel=document.getElementById("setup-log-panel");'
 	html[#html+1] = 'var logEl=document.getElementById("setup-log-content");'
@@ -165,10 +168,33 @@ act.cfgvalue = function(self, section)
 	html[#html+1] = 'resultEl.style.display="none";'
 	html[#html+1] = 'var dirSel=document.querySelector(\'[name="cbid.openclaw.main.install_dir"]\');'
 	html[#html+1] = 'var dirVal=dirSel?dirSel.value:"";'
-	html[#html+1] = '(new XHR()).get("' .. ctl_url .. '?action=setup&version="+encodeURIComponent(version)+"&install_dir="+encodeURIComponent(dirVal),null,function(x){'
+	html[#html+1] = 'var extraParam=isManual?"&manual=1":"";'
+	html[#html+1] = '(new XHR()).get("' .. ctl_url .. '?action=setup&version="+encodeURIComponent(version)+"&install_dir="+encodeURIComponent(dirVal)+extraParam,null,function(x){'
 	html[#html+1] = 'try{JSON.parse(x.responseText);}catch(e){}'
 	html[#html+1] = 'ocPollSetupLog();'
 	html[#html+1] = '});'
+	html[#html+1] = '}'
+
+	-- 离线 Node.js 包上传处理
+	html[#html+1] = 'function ocHandleNodeUpload(event){'
+	html[#html+1] = 'var file=event.target.files[0];if(!file)return;'
+	html[#html+1] = 'var btn=document.getElementById("btn-upload-node");'
+	html[#html+1] = 'var actionEl=document.getElementById("action-result");'
+	html[#html+1] = 'btn.disabled=true;btn.textContent="⏳ 上传中 0%";'
+	html[#html+1] = 'actionEl.innerHTML="<span style=\\"color:#999\\">📤 正在上传 Node.js 安装包，请勿刷新页面...</span>";'
+	html[#html+1] = 'var fd=new FormData();fd.append("archive",file);'
+	html[#html+1] = 'var xhr=new XMLHttpRequest();'
+	html[#html+1] = 'xhr.upload.onprogress=function(e){if(e.lengthComputable){var p=Math.round((e.loaded/e.total)*100);btn.textContent="⏳ 上传中 "+p+"%";}};'
+	html[#html+1] = 'xhr.onload=function(){'
+	html[#html+1] = 'btn.disabled=false;btn.textContent="📥 离线安装 Node";event.target.value="";'
+	html[#html+1] = 'if(xhr.status===200){try{var r=JSON.parse(xhr.responseText);'
+	html[#html+1] = 'if(r.status==="ok"){actionEl.innerHTML="<span style=\\"color:green\\">✅ 上传成功，准备解压安装...</span>";ocSetup("stable",true);}'
+	html[#html+1] = 'else{actionEl.innerHTML="<span style=\\"color:red\\">❌ 上传失败: "+(r.message||"未知")+"</span>";}}catch(e){actionEl.innerHTML="<span style=\\"color:red\\">❌ 上传解析失败</span>";}}'
+	html[#html+1] = 'else{actionEl.innerHTML="<span style=\\"color:red\\">❌ 上传网络错误 "+xhr.status+"</span>";}'
+	html[#html+1] = '};'
+	html[#html+1] = 'xhr.onerror=function(){btn.disabled=false;btn.textContent="📥 离线安装 Node";event.target.value="";actionEl.innerHTML="<span style=\\"color:red\\">❌ 上传请求失败</span>";};'
+	html[#html+1] = 'xhr.open("POST","' .. upload_url .. '",true);'
+	html[#html+1] = 'xhr.send(fd);'
 	html[#html+1] = '}'
 
 	-- 轮询安装日志

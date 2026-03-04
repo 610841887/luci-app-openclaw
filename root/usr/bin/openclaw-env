@@ -127,13 +127,25 @@ download_node() {
 	fi
 
 	# ── 构建下载 URL 列表 (按优先级排列) ──
-	local mirror_list=""
-	local musl_tarball="node-v${node_ver}-${node_arch}-musl.tar.xz"
-	local glibc_tarball="node-v${node_ver}-${node_arch}.tar.xz"
+	local tmp_file="/tmp/node-v${node_ver}.tar.xz"
+	local downloaded=0
 
-	if [ "$libc_type" = "musl" ]; then
+	# 手动离线安装模式
+	if [ -n "$NODE_MANUAL_FILE" ] && [ -f "$NODE_MANUAL_FILE" ]; then
 		echo ""
-		echo "=== 下载 Node.js v${node_ver} (${node_arch}, musl libc) ==="
+		echo "=== 使用用户手动上传的离线安装包 ==="
+		echo "  文件路径: $NODE_MANUAL_FILE"
+		cp "$NODE_MANUAL_FILE" "$tmp_file"
+		rm -f "$NODE_MANUAL_FILE"
+		downloaded=1
+	else
+		local mirror_list=""
+		local musl_tarball="node-v${node_ver}-${node_arch}-musl.tar.xz"
+		local glibc_tarball="node-v${node_ver}-${node_arch}.tar.xz"
+
+		if [ "$libc_type" = "musl" ]; then
+			echo ""
+			echo "=== 下载 Node.js v${node_ver} (${node_arch}, musl libc) ==="
 
 		if [ "$node_arch" = "linux-arm64" ]; then
 			# ARM64 musl: unofficial-builds 不提供，从项目自托管下载
@@ -157,32 +169,32 @@ download_node() {
 	fi
 
 	# ── 逐个尝试下载 ──
-	local downloaded=0
-	local tmp_file="/tmp/node-v${node_ver}.tar.xz"
-	local attempt=0
-	local total=$(echo "$mirror_list" | wc -w)
+	if [ "$downloaded" -eq 0 ]; then
+		local attempt=0
+		local total=$(echo "$mirror_list" | wc -w)
 
-	for mirror_url in $mirror_list; do
-		attempt=$((attempt + 1))
-		echo "  正在从 ${mirror_url} 下载... (${attempt}/${total})"
-		# 使用 -# 显示进度条，移除 2>/dev/null 使得输出能被重定向到日志文件中
-		if curl -fSL --connect-timeout 15 --max-time 300 -# -o "$tmp_file" "$mirror_url" || \
-		   wget --timeout=15 -O "$tmp_file" "$mirror_url"; then
-			# 校验文件大小 (Node.js xz 压缩包至少 5MB; Alpine 精简包约 12MB, 官方完整包约 30MB)
-			local fsize=$(wc -c < "$tmp_file" 2>/dev/null || echo 0)
-			if [ "$fsize" -gt 5000000 ] 2>/dev/null; then
-				downloaded=1
-				break
-			else
-				log_warn "文件大小异常 (${fsize} bytes), 跳过"
-				rm -f "$tmp_file"
+		for mirror_url in $mirror_list; do
+			attempt=$((attempt + 1))
+			echo "  正在从 ${mirror_url} 下载... (${attempt}/${total})"
+			# 使用 -# 显示进度条，移除 2>/dev/null 使得输出能被重定向到日志文件中
+			if curl -fSL --connect-timeout 15 --max-time 300 -# -o "$tmp_file" "$mirror_url" || \
+			   wget --timeout=15 -O "$tmp_file" "$mirror_url"; then
+				# 校验文件大小 (Node.js xz 压缩包至少 5MB; Alpine 精简包约 12MB, 官方完整包约 30MB)
+				local fsize=$(wc -c < "$tmp_file" 2>/dev/null || echo 0)
+				if [ "$fsize" -gt 5000000 ] 2>/dev/null; then
+					downloaded=1
+					break
+				else
+					log_warn "文件大小异常 (${fsize} bytes), 跳过"
+					rm -f "$tmp_file"
+				fi
 			fi
-		fi
-		log_warn "下载失败, 尝试备用镜像..."
-	done
+			log_warn "下载失败, 尝试备用镜像..."
+		done
+	fi
 
 	if [ "$downloaded" -eq 0 ]; then
-		log_error "所有镜像均下载失败"
+		log_error "所有镜像均下载失败，或未提供有效的离线安装包"
 		rm -f "$tmp_file"
 		exit 1
 	fi

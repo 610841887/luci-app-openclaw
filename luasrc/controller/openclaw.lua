@@ -64,6 +64,9 @@ function index()
 	-- 卸载运行环境 API
 	entry({"admin", "services", "openclaw", "uninstall"}, call("action_uninstall"), nil).leaf = true
 
+	-- 上传离线 Node 安装包 API
+	entry({"admin", "services", "openclaw", "upload_node"}, call("action_upload_node"), nil).leaf = true
+
 	-- 获取网关 Token API (仅认证用户可访问)
 	entry({"admin", "services", "openclaw", "get_token"}, call("action_get_token"), nil).leaf = true
 end
@@ -195,6 +198,7 @@ function action_service_ctl()
 		sys.exec("rm -f /tmp/openclaw-setup.log /tmp/openclaw-setup.pid /tmp/openclaw-setup.exit")
 		-- 获取用户选择的版本 (stable=指定版本, latest=最新版)
 		local version = http.formvalue("version") or ""
+		local is_manual = http.formvalue("manual") == "1"
 		local env_prefix = ""
 		if version == "stable" then
 			-- 稳定版: 读取 openclaw-env 中定义的 OC_TESTED_VERSION
@@ -208,6 +212,11 @@ function action_service_ctl()
 				env_prefix = "OC_VERSION=" .. version .. " "
 			end
 		end
+
+		if is_manual then
+			env_prefix = env_prefix .. "NODE_MANUAL_FILE=/tmp/node-manual.tar.xz "
+		end
+
 		-- 后台安装，成功后自动启用并启动服务
 		-- 注: openclaw-env 脚本有 set -e，init_openclaw 中的非关键失败不应阻止启动
 		sys.exec("( " .. env_prefix .. "/usr/bin/openclaw-env setup > /tmp/openclaw-setup.log 2>&1; RC=$?; echo $RC > /tmp/openclaw-setup.exit; if [ $RC -eq 0 ]; then uci set openclaw.main.enabled=1; uci commit openclaw; /etc/init.d/openclaw enable 2>/dev/null; sleep 1; /etc/init.d/openclaw start >> /tmp/openclaw-setup.log 2>&1; fi ) & echo $! > /tmp/openclaw-setup.pid")
@@ -437,4 +446,51 @@ function action_get_token()
 	local pty_token = uci:get("openclaw", "main", "pty_token") or ""
 	http.prepare_content("application/json")
 	http.write_json({ token = token, pty_token = pty_token })
+end
+
+-- ═══════════════════════════════════════════
+-- 离线 Node.js 安装包上传 API
+-- ═══════════════════════════════════════════
+function action_upload_node()
+	local http = require "luci.http"
+	local sys = require "luci.sys"
+
+	local tmpfile = "/tmp/node-manual.tar.xz"
+	local target_fd = nil
+	local ok = false
+	local err_msg = "未知错误"
+
+	http.setfilehandler(
+		function(meta, chunk, eof)
+			if not meta or not meta.name then return end
+			if meta.name ~= "archive" then return end
+			-- Initialize file descriptor on first chunk
+			if not target_fd then
+				sys.exec("rm -f " .. tmpfile)
+				target_fd = io.open(tmpfile, "w")
+			end
+			-- Write chunk if file was opened successfully
+			if target_fd then
+				target_fd:write(chunk)
+				-- Close file if it's the end of file
+				if eof then
+					target_fd:close()
+					target_fd = nil
+					ok = true
+				end
+			else
+				err_msg = "无法写入临时文件"
+			end
+		end
+	)
+
+	-- 触发 file handler
+	local formValue = http.formvalue("archive")
+
+	http.prepare_content("application/json")
+	if ok then
+		http.write_json({ status = "ok", message = "上传成功" })
+	else
+		http.write_json({ status = "error", message = err_msg })
+	end
 end
