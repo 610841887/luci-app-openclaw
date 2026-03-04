@@ -173,6 +173,12 @@ function action_service_ctl()
 	local sys = require "luci.sys"
 
 	local action = http.formvalue("action") or ""
+	local install_dir = http.formvalue("install_dir")
+	if install_dir and install_dir ~= "" then
+		local uci = require("luci.model.uci").cursor()
+		uci:set("openclaw", "main", "install_dir", install_dir)
+		uci:commit("openclaw")
+	end
 
 	if action == "start" then
 		sys.exec("/etc/init.d/openclaw start >/dev/null 2>&1 &")
@@ -385,6 +391,14 @@ end
 function action_uninstall()
 	local http = require "luci.http"
 	local sys = require "luci.sys"
+	local uci = require("luci.model.uci").cursor()
+
+	-- 保存路径到 UCI，确保卸载操作使用的是用户界面上选中的路径
+	local install_dir = http.formvalue("install_dir")
+	if install_dir and install_dir ~= "" then
+		uci:set("openclaw", "main", "install_dir", install_dir)
+		uci:commit("openclaw")
+	end
 
 	-- 停止服务
 	sys.exec("/etc/init.d/openclaw stop >/dev/null 2>&1")
