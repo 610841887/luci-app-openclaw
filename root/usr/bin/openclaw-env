@@ -167,6 +167,7 @@ download_node() {
 		mirror_list="${NODE_MIRROR}/v${node_ver}/${glibc_tarball}"
 		mirror_list="$mirror_list ${NODE_MIRROR_CN}/v${node_ver}/${glibc_tarball}"
 	fi
+	fi
 
 	# ── 逐个尝试下载 ──
 	if [ "$downloaded" -eq 0 ]; then
