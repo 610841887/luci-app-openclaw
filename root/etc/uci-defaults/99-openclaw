@@ -12,9 +12,12 @@ if ! id openclaw >/dev/null 2>&1; then
 	while grep -q "^[^:]*:x:${OC_GID}:" /etc/group 2>/dev/null; do
 		OC_GID=$((OC_GID + 1))
 	done
+	# 动态获取安装路径
+	OC_INSTALL_DIR=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "/opt/openclaw")
+	[ -z "$OC_INSTALL_DIR" ] && OC_INSTALL_DIR="/opt/openclaw"
 	# OpenWrt 方式：直接写入 /etc/passwd 和 /etc/shadow
 	if ! grep -q '^openclaw:' /etc/passwd 2>/dev/null; then
-		echo "openclaw:x:${OC_UID}:${OC_GID}:openclaw:/opt/openclaw/data:/bin/false" >> /etc/passwd
+		echo "openclaw:x:${OC_UID}:${OC_GID}:openclaw:${OC_INSTALL_DIR}/data:/bin/false" >> /etc/passwd
 	fi
 	if ! grep -q '^openclaw:' /etc/shadow 2>/dev/null; then
 		echo 'openclaw:x:0:0:99999:7:::' >> /etc/shadow
@@ -24,11 +27,15 @@ if ! id openclaw >/dev/null 2>&1; then
 	fi
 fi
 
+# 动态获取安装路径
+OC_INSTALL_DIR=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "/opt/openclaw")
+[ -z "$OC_INSTALL_DIR" ] && OC_INSTALL_DIR="/opt/openclaw"
+
 # 创建数据目录
-mkdir -p /opt/openclaw/data/.openclaw
-mkdir -p /opt/openclaw/node
-mkdir -p /opt/openclaw/global
-chown -R openclaw:openclaw /opt/openclaw 2>/dev/null || true
+mkdir -p "$OC_INSTALL_DIR/data/.openclaw"
+mkdir -p "$OC_INSTALL_DIR/node"
+mkdir -p "$OC_INSTALL_DIR/global"
+chown -R openclaw:openclaw "$OC_INSTALL_DIR" 2>/dev/null || true
 
 # 生成随机 Token (如果尚未设置)
 CURRENT_TOKEN=$(uci -q get openclaw.main.token)

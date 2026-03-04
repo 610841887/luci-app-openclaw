@@ -29,9 +29,13 @@ get_pid_by_port() {
 }
 
 # ── 路径 (OpenWrt 适配) ──
-NODE_BASE="${NODE_BASE:-/opt/openclaw/node}"
-OC_GLOBAL="${OC_GLOBAL:-/opt/openclaw/global}"
-OC_DATA="${OC_DATA:-/opt/openclaw/data}"
+# 获取安装路径 (优先 UCI，如果获取失败则降级到默认)
+OC_INSTALL_DIR=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "")
+[ -z "$OC_INSTALL_DIR" ] && OC_INSTALL_DIR="/opt/openclaw"
+
+NODE_BASE="${NODE_BASE:-${OC_INSTALL_DIR}/node}"
+OC_GLOBAL="${OC_GLOBAL:-${OC_INSTALL_DIR}/global}"
+OC_DATA="${OC_DATA:-${OC_INSTALL_DIR}/data}"
 NODE_BIN="${NODE_BASE}/bin/node"
 OC_STATE_DIR="${OC_DATA}/.openclaw"
 CONFIG_FILE="${OC_STATE_DIR}/openclaw.json"

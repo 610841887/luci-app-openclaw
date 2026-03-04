@@ -5,12 +5,14 @@ module("luci.controller.openclaw", package.seeall)
 local function get_openclaw_version()
 	local sys = require "luci.sys"
 	-- 优先从 package.json 读取版本号 (轻量)，避免每次启动 node 进程
+	local uci = require "luci.model.uci".cursor()
+	local install_dir = uci:get("openclaw", "main", "install_dir") or "/opt/openclaw"
 	local dirs = {
-		"/opt/openclaw/global/lib/node_modules/openclaw",
-		"/opt/openclaw/global/node_modules/openclaw",
+		install_dir .. "/global/lib/node_modules/openclaw",
+		install_dir .. "/global/node_modules/openclaw",
 	}
 	-- pnpm 版本目录
-	local pnpm_glob = sys.exec("ls -d /opt/openclaw/global/*/node_modules/openclaw 2>/dev/null"):gsub("%s+$", "")
+	local pnpm_glob = sys.exec("ls -d " .. install_dir .. "/global/*/node_modules/openclaw 2>/dev/null"):gsub("%s+$", "")
 	for d in pnpm_glob:gmatch("[^\n]+") do
 		dirs[#dirs + 1] = d
 	end
@@ -96,7 +98,8 @@ function action_status()
 	}
 
 	-- 检查 Node.js
-	local node_bin = "/opt/openclaw/node/bin/node"
+	local install_dir = uci:get("openclaw", "main", "install_dir") or "/opt/openclaw"
+	local node_bin = install_dir .. "/node/bin/node"
 	local f = io.open(node_bin, "r")
 	if f then
 		f:close()
@@ -119,7 +122,7 @@ function action_status()
 	result.pty_running = (tonumber(pty_check) or 0) > 0
 
 	-- 读取当前活跃模型
-	local config_file = "/opt/openclaw/data/.openclaw/openclaw.json"
+	local config_file = install_dir .. "/data/.openclaw/openclaw.json"
 	local cf = io.open(config_file, "r")
 	if cf then
 		local content = cf:read("*a")
@@ -281,8 +284,10 @@ function action_check_update()
 	-- 当前版本
 	local current = get_openclaw_version()
 
+	local uci = require "luci.model.uci".cursor()
+	local install_dir = uci:get("openclaw", "main", "install_dir") or "/opt/openclaw"
 	-- 最新版本 (从 npm registry 查询)
-	local latest = sys.exec("PATH=/opt/openclaw/node/bin:/opt/openclaw/global/bin:$PATH npm view openclaw version 2>/dev/null"):gsub("%s+", "")
+	local latest = sys.exec("PATH=" .. install_dir .. "/node/bin:" .. install_dir .. "/global/bin:$PATH npm view openclaw version 2>/dev/null"):gsub("%s+", "")
 
 	local has_update = false
 	if current ~= "" and latest ~= "" and current ~= latest then
@@ -387,8 +392,13 @@ function action_uninstall()
 	sys.exec("/etc/init.d/openclaw disable 2>/dev/null")
 	-- 设置 UCI enabled=0
 	sys.exec("uci set openclaw.main.enabled=0; uci commit openclaw 2>/dev/null")
+	-- 获取安装目录
+	local uci = require "luci.model.uci".cursor()
+	local install_dir = uci:get("openclaw", "main", "install_dir") or "/opt/openclaw"
 	-- 删除 Node.js + OpenClaw 运行环境
-	sys.exec("rm -rf /opt/openclaw")
+	if install_dir and install_dir ~= "" and install_dir ~= "/" then
+		sys.exec("rm -rf " .. install_dir)
+	end
 	-- 清理临时文件
 	sys.exec("rm -f /tmp/openclaw-setup.* /tmp/openclaw-update.log /var/run/openclaw*.pid")
 	-- 删除 openclaw 系统用户

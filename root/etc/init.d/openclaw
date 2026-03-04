@@ -10,9 +10,18 @@ EXTRA_HELP="    setup            下载 Node.js 并安装 OpenClaw
         status_service   显示服务状态
         restart_gateway  仅重启 Gateway 实例 (不影响 Web PTY)"
 
-NODE_BASE="/opt/openclaw/node"
-OC_GLOBAL="/opt/openclaw/global"
-OC_DATA="/opt/openclaw/data"
+# Helper function to get the current installation directory
+get_install_dir() {
+	local dir
+	dir=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "")
+	[ -z "$dir" ] && dir="/opt/openclaw"
+	echo "$dir"
+}
+
+OC_INSTALL_DIR=$(get_install_dir)
+NODE_BASE="${OC_INSTALL_DIR}/node"
+OC_GLOBAL="${OC_INSTALL_DIR}/global"
+OC_DATA="${OC_INSTALL_DIR}/data"
 NODE_BIN="${NODE_BASE}/bin/node"
 CONFIG_FILE="${OC_DATA}/.openclaw/openclaw.json"
 
@@ -137,7 +146,7 @@ return 0
 # 检查 Node.js
 if [ ! -x "$NODE_BIN" ]; then
 echo "未找到 Node.js: $NODE_BIN"
-echo "请运行: openclaw-env setup"
+echo "请运行: openclaw-env setup 或在界面中更换安装路径"
 return 1
 fi
 
@@ -145,7 +154,7 @@ fi
 local oc_entry
 oc_entry=$(get_oc_entry)
 if [ -z "$oc_entry" ]; then
-echo "OpenClaw 未安装。请运行: openclaw-env setup"
+echo "OpenClaw 未安装。请运行: openclaw-env setup 或查看安装路径是否正确"
 return 1
 fi
 

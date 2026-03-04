@@ -16,9 +16,13 @@ NODE_VERSION="${NODE_VERSION:-22.16.0}"
 OC_TESTED_VERSION="2026.3.1"
 # 用户可通过 OC_VERSION 环境变量覆盖安装版本
 OC_VERSION="${OC_VERSION:-}"
-NODE_BASE="/opt/openclaw/node"
-OC_GLOBAL="/opt/openclaw/global"
-OC_DATA="/opt/openclaw/data"
+# 获取安装路径 (优先 UCI，如果获取失败则降级到默认)
+OC_INSTALL_DIR=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "")
+[ -z "$OC_INSTALL_DIR" ] && OC_INSTALL_DIR="/opt/openclaw"
+
+NODE_BASE="${OC_INSTALL_DIR}/node"
+OC_GLOBAL="${OC_INSTALL_DIR}/global"
+OC_DATA="${OC_INSTALL_DIR}/data"
 NODE_BIN="${NODE_BASE}/bin/node"
 NPM_BIN="${NODE_BASE}/bin/npm"
 PNPM_BIN="${OC_GLOBAL}/bin/pnpm"
@@ -417,9 +421,8 @@ do_check() {
 		echo "  配置:     未初始化"
 	fi
 
-	# 磁盘使用
 	local used
-	used=$(du -sh /opt/openclaw 2>/dev/null | awk '{print $1}')
+	used=$(du -sh "$OC_INSTALL_DIR" 2>/dev/null | awk '{print $1}')
 	echo "  磁盘:     ${used:-N/A}"
 
 	# libc 类型

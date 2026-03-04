@@ -4,14 +4,37 @@ local sys = require "luci.sys"
 m = Map("openclaw", "OpenClaw AI 网关",
 	"OpenClaw 是一个 AI 编程代理网关，支持 GitHub Copilot、Claude、GPT、Gemini 等大模型以及 Telegram、Discord 等多种消息渠道。")
 
--- 隐藏底部的「保存并应用」「保存」「复位」按钮 (本页无可编辑的 UCI 选项)
-m.submit = false
+-- 隐藏“复位”按钮，但保留“保存并应用”按钮供基本设置使用
 m.reset = false
 
 -- ═══════════════════════════════════════════
 -- 状态面板
 -- ═══════════════════════════════════════════
 m:section(SimpleSection).template = "openclaw/status"
+
+-- ═══════════════════════════════════════════
+-- 基本设置 (安装路径)
+-- ═══════════════════════════════════════════
+s_main = m:section(NamedSection, "main", "openclaw", "基本设置")
+s_main.addremove = false
+s_main.anonymous = true
+
+local install_dir = s_main:option(Value, "install_dir", "安装路径",
+	"指定 Node.js 及 OpenClaw 的安装位置，留空或默认建议使用 <code>/opt/openclaw</code>。<br/>设备空间不足时，可指定为外挂 U 盘或硬盘目录 (例如 <code>/mnt/sda1/openclaw</code>)。")
+install_dir.default = "/opt/openclaw"
+install_dir.placeholder = "/opt/openclaw"
+install_dir.rmempty = false
+
+-- 获取系统中可用的挂载点提供快速选择
+for _, mnt in ipairs(sys.mounts()) do
+	-- 过滤一些不需要展示的挂载点
+	if not mnt.fs:match("tmpfs") and not mnt.fs:match("overlay") and not mnt.fs:match("squashfs") and mnt.mountpoint ~= "/" then
+		local p = mnt.mountpoint:gsub("/$", "") .. "/openclaw"
+		install_dir:value(p, p .. " (" .. mnt.fs .. ", " .. math.floor(mnt.avail / 1024) .. " MB 可用)")
+	end
+end
+install_dir:value("/opt/openclaw", "/opt/openclaw (默认路径)")
+
 
 -- ═══════════════════════════════════════════
 -- 快捷操作
@@ -190,15 +213,15 @@ act.cfgvalue = function(self, section)
 	html[#html+1] = '}'
 	-- npm 安装失败
 	html[#html+1] = 'if(ll.indexOf("npm err")>=0||ll.indexOf("npm warn")>=0&&ll.indexOf("openclaw 安装验证失败")>=0){'
-	html[#html+1] = 'reasons.push("📦 <b>npm 安装 OpenClaw 失败</b> — npm 包下载或安装出错。<br/>&nbsp;&nbsp;💡 解决: 尝试手动安装 <code>PATH=/opt/openclaw/node/bin:$PATH npm install -g openclaw@latest --prefix=/opt/openclaw/global</code>");'
+	html[#html+1] = 'reasons.push("📦 <b>npm 安装 OpenClaw 失败</b> — npm 包下载或安装出错。<br/>&nbsp;&nbsp;💡 解决: 尝试手动安装 <code>npm install -g openclaw@latest</code>");'
 	html[#html+1] = '}'
 	-- 权限问题
 	html[#html+1] = 'if(ll.indexOf("permission denied")>=0||ll.indexOf("eacces")>=0){'
-	html[#html+1] = 'reasons.push("🔒 <b>权限不足</b> — 文件或目录权限问题。<br/>&nbsp;&nbsp;💡 解决: 运行 <code>chown -R openclaw:openclaw /opt/openclaw</code> 或以 root 用户重试。");'
+	html[#html+1] = 'reasons.push("🔒 <b>权限不足</b> — 文件或目录权限问题。<br/>&nbsp;&nbsp;💡 解决: 尝试以 root 用户重试。");'
 	html[#html+1] = '}'
 	-- tar 解压失败
 	html[#html+1] = 'if(ll.indexOf("tar")>=0&&(ll.indexOf("error")>=0||ll.indexOf("fail")>=0)){'
-	html[#html+1] = 'reasons.push("📂 <b>解压失败</b> — Node.js 安装包可能下载不完整。<br/>&nbsp;&nbsp;💡 解决: 删除缓存重试 <code>rm -rf /opt/openclaw/node && openclaw-env setup</code>");'
+	html[#html+1] = 'reasons.push("📂 <b>解压失败</b> — Node.js 安装包可能下载不完整。<br/>&nbsp;&nbsp;💡 解决: 删除缓存重试并重新执行 <code>openclaw-env setup</code>");'
 	html[#html+1] = '}'
 	-- 验证失败
 	html[#html+1] = 'if(ll.indexOf("安装验证失败")>=0){'
@@ -317,7 +340,7 @@ act.cfgvalue = function(self, section)
 
 	-- 卸载运行环境
 	html[#html+1] = 'function ocUninstall(){'
-	html[#html+1] = 'if(!confirm("确定要卸载 OpenClaw 运行环境？\\n\\n将删除 Node.js、OpenClaw 程序及配置数据（/opt/openclaw 目录），服务将停止运行。\\n\\n插件本身不会被删除，之后可重新安装运行环境。"))return;'
+	html[#html+1] = 'if(!confirm("确定要卸载 OpenClaw 运行环境？\\n\\n将删除 Node.js、OpenClaw 程序及配置数据（安装目录），服务将停止运行。\\n\\n插件本身不会被删除，之后可重新安装运行环境。"))return;'
 	html[#html+1] = 'var btn=document.getElementById("btn-uninstall");'
 	html[#html+1] = 'var el=document.getElementById("action-result");'
 	html[#html+1] = 'btn.disabled=true;btn.textContent="⏳ 正在卸载...";'
