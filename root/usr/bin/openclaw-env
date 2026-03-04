@@ -165,8 +165,9 @@ download_node() {
 	for mirror_url in $mirror_list; do
 		attempt=$((attempt + 1))
 		echo "  正在从 ${mirror_url} 下载... (${attempt}/${total})"
-		if curl -fSL --connect-timeout 15 --max-time 300 -o "$tmp_file" "$mirror_url" 2>/dev/null || \
-		   wget -q --timeout=15 -O "$tmp_file" "$mirror_url" 2>/dev/null; then
+		# 使用 -# 显示进度条，移除 2>/dev/null 使得输出能被重定向到日志文件中
+		if curl -fSL --connect-timeout 15 --max-time 300 -# -o "$tmp_file" "$mirror_url" || \
+		   wget --timeout=15 -O "$tmp_file" "$mirror_url"; then
 			# 校验文件大小 (Node.js xz 压缩包至少 5MB; Alpine 精简包约 12MB, 官方完整包约 30MB)
 			local fsize=$(wc -c < "$tmp_file" 2>/dev/null || echo 0)
 			if [ "$fsize" -gt 5000000 ] 2>/dev/null; then
