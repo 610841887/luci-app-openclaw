@@ -26,7 +26,32 @@ install_dir.placeholder = "/opt/openclaw"
 install_dir.rmempty = false
 
 -- 获取系统中可用的挂载点提供快速选择
-for _, mnt in ipairs(sys.mounts()) do
+local function get_mounts()
+	local mounts = {}
+	if type(sys.mounts) == "function" then
+		for _, m in ipairs(sys.mounts()) do
+			table.insert(mounts, m)
+		end
+		return mounts
+	end
+	-- 兼容较新的 OpenWrt 缺少 sys.mounts() 的情况
+	local df_out = sys.exec("df -k 2>/dev/null")
+	if df_out then
+		for line in df_out:gmatch("[^\r\n]+") do
+			local fs, _blocks, _used, avail, _use, mountpoint = line:match("^(%S+)%s+(%d+)%s+(%d+)%s+(%d+)%s+(%S+)%s+(.+)$")
+			if fs and mountpoint and fs ~= "Filesystem" then
+				table.insert(mounts, {
+					fs = fs,
+					mountpoint = mountpoint,
+					avail = tonumber(avail) or 0
+				})
+			end
+		end
+	end
+	return mounts
+end
+
+for _, mnt in ipairs(get_mounts()) do
 	-- 过滤一些不需要展示的挂载点
 	if not mnt.fs:match("tmpfs") and not mnt.fs:match("overlay") and not mnt.fs:match("squashfs") and mnt.mountpoint ~= "/" then
 		local p = mnt.mountpoint:gsub("/$", "") .. "/openclaw"
