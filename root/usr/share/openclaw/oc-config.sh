@@ -650,8 +650,8 @@ configure_model() {
 			prompt_with_default "API Key" "" api_key
 			prompt_with_default "模型名称" "" model_name
 			if [ -n "$base_url" ] && [ -n "$api_key" ] && [ -n "$model_name" ]; then
-				json_set models.custom.apiKey "$api_key"
-				json_set models.custom.baseUrl "$base_url"
+				json_set models.openai.apiKey "$api_key"
+				json_set models.openai.baseUrl "$base_url"
 				json_set agents.defaults.model.primary "$model_name"
 				echo -e "  ${GREEN}✅ 自定义模型已配置${NC}"
 			fi

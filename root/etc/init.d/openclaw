@@ -123,6 +123,8 @@ d.gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback=true;
 delete d.gateway.name;
 delete d.gateway.bonjour;
 delete d.gateway.plugins;
+// 清理不再支持的 models.custom 字段，OpenClaw v2026.3.1+ 废弃了名为 custom 的 providers
+if(d.models && d.models.custom) delete d.models.custom;
 fs.writeFileSync(f,JSON.stringify(d,null,2));
 " 2>/dev/null
 fi
