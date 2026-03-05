@@ -70,8 +70,8 @@ oc_cmd() {
 		"$NODE_BIN" "$OC_ENTRY" "$@" 2>&1
 		local rc=$?
 		# 修复权限: oc_cmd 以 root 运行但配置文件应属于 openclaw 用户
-		chown openclaw:openclaw "$CONFIG_FILE" 2>/dev/null || true
-		chown openclaw:openclaw "${CONFIG_FILE}.bak" 2>/dev/null || true
+		chown root:root "$CONFIG_FILE" 2>/dev/null || true
+		chown root:root "${CONFIG_FILE}.bak" 2>/dev/null || true
 		return $rc
 	else
 		echo "ERROR: OpenClaw 未安装或 Node.js 不可用"
@@ -163,7 +163,7 @@ restart_gateway() {
 	echo -e "  ${YELLOW}正在重启 Gateway...${NC}"
 
 	# 修复数据目录权限 (root 用户操作可能改变了文件属主)
-	chown -R openclaw:openclaw "$OC_DATA" 2>/dev/null || true
+	chown -R root:root "$OC_DATA" 2>/dev/null || true
 
 	local port
 	port=$(json_get gateway.port)
@@ -791,8 +791,8 @@ configure_telegram() {
 
 		# ── 使用 json_set 直接写入 (避免 oc_cmd CLI 参数解析问题) ──
 		json_set channels.telegram.botToken "$tg_token"
-		chown openclaw:openclaw "$CONFIG_FILE" 2>/dev/null || true
-		chown openclaw:openclaw "${CONFIG_FILE}.bak" 2>/dev/null || true
+		chown root:root "$CONFIG_FILE" 2>/dev/null || true
+		chown root:root "${CONFIG_FILE}.bak" 2>/dev/null || true
 
 		# ── 保存后验证: 读回检查 Token 是否完整 ──
 		local saved_token=$(json_get channels.telegram.botToken)
@@ -831,7 +831,7 @@ configure_discord() {
 	dc_token=$(sanitize_input "$dc_token" | tr -d '[:space:]')
 	if [ -n "$dc_token" ]; then
 		json_set channels.discord.botToken "$dc_token"
-		chown openclaw:openclaw "$CONFIG_FILE" 2>/dev/null || true
+		chown root:root "$CONFIG_FILE" 2>/dev/null || true
 		echo -e "  ${GREEN}✅ Discord Bot Token 已保存${NC}"
 		ask_restart
 	fi
@@ -858,7 +858,7 @@ configure_feishu() {
 	if [ -n "$fs_appid" ] && [ -n "$fs_secret" ]; then
 		json_set channels.feishu.appId "$fs_appid"
 		json_set channels.feishu.appSecret "$fs_secret"
-		chown openclaw:openclaw "$CONFIG_FILE" 2>/dev/null || true
+		chown root:root "$CONFIG_FILE" 2>/dev/null || true
 		echo -e "  ${GREEN}✅ 飞书配置已保存${NC}"
 		ask_restart
 	else
@@ -877,7 +877,7 @@ configure_slack() {
 	sk_token=$(sanitize_input "$sk_token" | tr -d '[:space:]')
 	if [ -n "$sk_token" ]; then
 		json_set channels.slack.botToken "$sk_token"
-		chown openclaw:openclaw "$CONFIG_FILE" 2>/dev/null || true
+		chown root:root "$CONFIG_FILE" 2>/dev/null || true
 		echo -e "  ${GREEN}✅ Slack Bot Token 已保存${NC}"
 		ask_restart
 	fi
@@ -1175,7 +1175,7 @@ reset_to_defaults() {
 				rm -f "$CONFIG_FILE" 2>/dev/null || true
 				rm -f "${CONFIG_FILE}.bak" 2>/dev/null || true
 				echo '{}' > "$CONFIG_FILE"
-				chown openclaw:openclaw "$CONFIG_FILE" 2>/dev/null || true
+				chown root:root "$CONFIG_FILE" 2>/dev/null || true
 				echo -e "  ${GREEN}   配置已清除${NC}"
 
 				echo -e "  ${CYAN}[4/5] 重新初始化...${NC}"
@@ -1304,7 +1304,7 @@ case "${1:-}" in
 	--set)
 		if [ -n "${2:-}" ] && [ -n "${3:-}" ]; then
 			json_set "$2" "$3"
-			chown openclaw:openclaw "$CONFIG_FILE" 2>/dev/null || true
+			chown root:root "$CONFIG_FILE" 2>/dev/null || true
 			echo -e "${GREEN}✅ 已设置 $2${NC}"
 		else
 			echo "用法: oc-config.sh --set <key> <value>"
