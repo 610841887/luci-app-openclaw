@@ -336,10 +336,10 @@ init_openclaw() {
 		log_info "初始化完成"
 	fi
 
-	# 修复可能产生的权限问题
-	chown -R root:root "$OC_DATA" 2>/dev/null || true
-	chown -R root:root "$OC_GLOBAL" 2>/dev/null || true
-	chown -R root:root "$NODE_BASE" 2>/dev/null || true
+	# 设置文件权限
+	chown -R openclaw:openclaw "$OC_DATA" 2>/dev/null || true
+	chown -R openclaw:openclaw "$OC_GLOBAL" 2>/dev/null || true
+	chown -R openclaw:openclaw "$NODE_BASE" 2>/dev/null || true
 }
 
 do_setup() {

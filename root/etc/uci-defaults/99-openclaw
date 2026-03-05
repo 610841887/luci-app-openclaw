@@ -1,8 +1,31 @@
 #!/bin/sh
 # luci-app-openclaw — 首次安装初始化脚本
 
-# 已移除创建 openclaw 系统用户的逻辑，以适应自定义安装目录通常为 NTFS/FAT32 的外置 USB 驱动器（外置驱动器不支持 chown 且往往默认为 root 用户权限）。
-# 这里保留注释，旧版升级上来的用户其残留 openclaw 账号会在卸载时自动清理。
+# 创建 openclaw 系统用户 (无 home, 无 shell)
+if ! id openclaw >/dev/null 2>&1; then
+	# 动态查找可用 UID/GID (从 1000 开始，避免与已有用户冲突)
+	OC_UID=1000
+	while grep -q "^[^:]*:x:${OC_UID}:" /etc/passwd 2>/dev/null; do
+		OC_UID=$((OC_UID + 1))
+	done
+	OC_GID=$OC_UID
+	while grep -q "^[^:]*:x:${OC_GID}:" /etc/group 2>/dev/null; do
+		OC_GID=$((OC_GID + 1))
+	done
+	# 动态获取安装路径
+	OC_INSTALL_DIR=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "/opt/openclaw")
+	[ -z "$OC_INSTALL_DIR" ] && OC_INSTALL_DIR="/opt/openclaw"
+	# OpenWrt 方式：直接写入 /etc/passwd 和 /etc/shadow
+	if ! grep -q '^openclaw:' /etc/passwd 2>/dev/null; then
+		echo "openclaw:x:${OC_UID}:${OC_GID}:openclaw:${OC_INSTALL_DIR}/data:/bin/false" >> /etc/passwd
+	fi
+	if ! grep -q '^openclaw:' /etc/shadow 2>/dev/null; then
+		echo 'openclaw:x:0:0:99999:7:::' >> /etc/shadow
+	fi
+	if ! grep -q '^openclaw:' /etc/group 2>/dev/null; then
+		echo "openclaw:x:${OC_GID}:" >> /etc/group
+	fi
+fi
 
 # 动态获取安装路径
 OC_INSTALL_DIR=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "/opt/openclaw")
@@ -12,7 +35,7 @@ OC_INSTALL_DIR=$(uci -q get openclaw.main.install_dir 2>/dev/null || echo "/opt/
 mkdir -p "$OC_INSTALL_DIR/data/.openclaw"
 mkdir -p "$OC_INSTALL_DIR/node"
 mkdir -p "$OC_INSTALL_DIR/global"
-chown -R root:root "$OC_INSTALL_DIR" 2>/dev/null || true
+chown -R openclaw:openclaw "$OC_INSTALL_DIR" 2>/dev/null || true
 
 # 生成随机 Token (如果尚未设置)
 CURRENT_TOKEN=$(uci -q get openclaw.main.token)
